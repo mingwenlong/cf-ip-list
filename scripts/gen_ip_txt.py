@@ -51,7 +51,7 @@ async def probe_tls(ip: str, port: int, server_name: str, timeout: float) -> flo
 
 
 async def run() -> None:
-    target_host = read_env("TARGET_HOST", "www.cloudflare.com")
+    target_host = read_env("TARGET_HOST", "qq.mingvpn.dpdns.org")
 
     ports_raw = read_env("PORTS", "443,2053,2083,2087,2096,8443")
     ports = []
