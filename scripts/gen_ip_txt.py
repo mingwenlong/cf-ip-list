@@ -50,6 +50,47 @@ async def probe_tls(ip: str, port: int, server_name: str, timeout: float) -> flo
         return None
 
 
+async def probe_http(ip: str, port: int, server_name: str, timeout: float) -> float | None:
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    start = time.perf_counter()
+    writer = None
+    try:
+        reader, writer = await asyncio.wait_for(
+            asyncio.open_connection(ip, port, ssl=ctx, server_hostname=server_name),
+            timeout=timeout,
+        )
+        req = (
+            f"GET / HTTP/1.1\r\n"
+            f"Host: {server_name}\r\n"
+            f"User-Agent: Mozilla/5.0\r\n"
+            f"Accept: */*\r\n"
+            f"Connection: close\r\n\r\n"
+        ).encode("utf-8")
+        writer.write(req)
+        await writer.drain()
+        first = await asyncio.wait_for(reader.readline(), timeout=timeout)
+        if not first.startswith(b"HTTP/1.1 ") and not first.startswith(b"HTTP/2 "):
+            return None
+        try:
+            status = int(first.split()[1])
+        except Exception:
+            return None
+        if status >= 500:
+            return None
+        return (time.perf_counter() - start) * 1000.0
+    except Exception:
+        return None
+    finally:
+        if writer is not None:
+            writer.close()
+            try:
+                await writer.wait_closed()
+            except Exception:
+                pass
+
+
 async def run() -> None:
     target_host = read_env("TARGET_HOST", "qq.mingvpn.dpdns.org")
 
@@ -81,36 +122,66 @@ async def run() -> None:
         timeout_sec = float(read_env("TIMEOUT_SEC", "2.5"))
     except ValueError:
         timeout_sec = 2.5
+    try:
+        max_ms = float(read_env("MAX_MS", "180"))
+    except ValueError:
+        max_ms = 180
+    try:
+        max_per_prefix = int(read_env("MAX_PER_PREFIX", "3"))
+    except ValueError:
+        max_per_prefix = 3
 
     sample_ips = max(1, sample_ips)
     output_limit = max(1, output_limit)
     concurrency = max(1, min(concurrency, sample_ips))
     timeout_sec = max(0.2, timeout_sec)
+    max_ms = max(1.0, max_ms)
+    max_per_prefix = max(1, max_per_prefix)
 
     cidrs = fetch_lines("https://www.cloudflare.com/ips-v4")
     if not cidrs:
         raise SystemExit("Failed to fetch Cloudflare IPv4 ranges")
 
     candidates: list[tuple[str, int]] = []
-    for _ in range(sample_ips):
+    seen_candidates: set[tuple[str, int]] = set()
+    while len(candidates) < sample_ips:
         cidr = random.choice(cidrs)
         ip = pick_random_ipv4_from_cidr(cidr)
         port = random.choice(ports)
-        candidates.append((ip, port))
+        key = (ip, port)
+        if key in seen_candidates:
+            continue
+        seen_candidates.add(key)
+        candidates.append(key)
 
     sem = asyncio.Semaphore(concurrency)
 
     async def one(ip: str, port: int):
         async with sem:
-            ms = await probe_tls(ip, port, target_host, timeout_sec)
+            tls_ms = await probe_tls(ip, port, target_host, timeout_sec)
+            if tls_ms is None:
+                return (ip, port, None)
+            ms = await probe_http(ip, port, target_host, timeout_sec)
             return (ip, port, ms)
 
     results = await asyncio.gather(*(one(ip, port) for ip, port in candidates))
 
-    ok = [(ip, port, ms) for ip, port, ms in results if ms is not None]
+    ok = [(ip, port, ms) for ip, port, ms in results if ms is not None and ms <= max_ms]
     ok.sort(key=lambda x: x[2])
 
-    top = ok[:output_limit]
+    picked = []
+    prefix_count: dict[str, int] = {}
+    for ip, port, ms in ok:
+        prefix = ".".join(ip.split(".")[:2])
+        count = prefix_count.get(prefix, 0)
+        if count >= max_per_prefix:
+            continue
+        picked.append((ip, port, ms))
+        prefix_count[prefix] = count + 1
+        if len(picked) >= output_limit:
+            break
+
+    top = picked
     lines = [f"{ip}:{port}#{int(ms)}ms" for ip, port, ms in top]
     content = "\n".join(lines).strip() + ("\n" if lines else "")
 
