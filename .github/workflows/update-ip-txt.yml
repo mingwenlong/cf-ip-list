@@ -26,6 +26,7 @@ jobs:
           OUTPUT_LIMIT: ${{ vars.OUTPUT_LIMIT || '40' }}
           CONCURRENCY: ${{ vars.CONCURRENCY || '250' }}
           TIMEOUT_SEC: ${{ vars.TIMEOUT_SEC || '2.0' }}
+          WS_PATH: ${{ vars.WS_PATH || '/' }}
           MAX_MS: ${{ vars.MAX_MS || '180' }}
           MAX_PER_PREFIX: ${{ vars.MAX_PER_PREFIX || '3' }}
         run: python scripts/gen_ip_txt.py
