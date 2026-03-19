@@ -22,10 +22,12 @@ jobs:
         env:
           TARGET_HOST: ${{ vars.TARGET_HOST || 'qq.mingvpn.dpdns.org' }}
           PORTS: ${{ vars.PORTS || '443,2053,2083,2087,2096,8443' }}
-          SAMPLE_IPS: ${{ vars.SAMPLE_IPS || '600' }}
-          OUTPUT_LIMIT: ${{ vars.OUTPUT_LIMIT || '80' }}
+          SAMPLE_IPS: ${{ vars.SAMPLE_IPS || '800' }}
+          OUTPUT_LIMIT: ${{ vars.OUTPUT_LIMIT || '40' }}
           CONCURRENCY: ${{ vars.CONCURRENCY || '250' }}
-          TIMEOUT_SEC: ${{ vars.TIMEOUT_SEC || '2.5' }}
+          TIMEOUT_SEC: ${{ vars.TIMEOUT_SEC || '2.0' }}
+          MAX_MS: ${{ vars.MAX_MS || '180' }}
+          MAX_PER_PREFIX: ${{ vars.MAX_PER_PREFIX || '3' }}
         run: python scripts/gen_ip_txt.py
 
       - name: Commit changes
