@@ -1,4 +1,6 @@
 import asyncio
+import base64
+import hashlib
 import ipaddress
 import os
 import random
@@ -50,7 +52,7 @@ async def probe_tls(ip: str, port: int, server_name: str, timeout: float) -> flo
         return None
 
 
-async def probe_http(ip: str, port: int, server_name: str, timeout: float) -> float | None:
+async def probe_websocket(ip: str, port: int, server_name: str, ws_path: str, timeout: float) -> float | None:
     ctx = ssl.create_default_context()
     ctx.check_hostname = False
     ctx.verify_mode = ssl.CERT_NONE
@@ -61,23 +63,37 @@ async def probe_http(ip: str, port: int, server_name: str, timeout: float) -> fl
             asyncio.open_connection(ip, port, ssl=ctx, server_hostname=server_name),
             timeout=timeout,
         )
+        ws_key = base64.b64encode(os.urandom(16)).decode("ascii")
         req = (
-            f"GET / HTTP/1.1\r\n"
+            f"GET {ws_path} HTTP/1.1\r\n"
             f"Host: {server_name}\r\n"
             f"User-Agent: Mozilla/5.0\r\n"
-            f"Accept: */*\r\n"
-            f"Connection: close\r\n\r\n"
+            f"Upgrade: websocket\r\n"
+            f"Connection: Upgrade\r\n"
+            f"Sec-WebSocket-Key: {ws_key}\r\n"
+            f"Sec-WebSocket-Version: 13\r\n\r\n"
         ).encode("utf-8")
         writer.write(req)
         await writer.drain()
-        first = await asyncio.wait_for(reader.readline(), timeout=timeout)
-        if not first.startswith(b"HTTP/1.1 ") and not first.startswith(b"HTTP/2 "):
+        header = await asyncio.wait_for(reader.readuntil(b"\r\n\r\n"), timeout=timeout)
+        first, *rest = header.split(b"\r\n")
+        if not first.startswith(b"HTTP/1.1 101"):
             return None
-        try:
-            status = int(first.split()[1])
-        except Exception:
+        headers = {}
+        for line in rest:
+            if not line or b":" not in line:
+                continue
+            k, v = line.split(b":", 1)
+            headers[k.strip().lower()] = v.strip().lower()
+        if headers.get(b"upgrade") != b"websocket":
             return None
-        if status >= 500:
+        accept = headers.get(b"sec-websocket-accept")
+        if not accept:
+            return None
+        expected = base64.b64encode(
+            hashlib.sha1((ws_key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11").encode("utf-8")).digest()
+        ).decode("ascii").lower().encode("ascii")
+        if accept != expected:
             return None
         return (time.perf_counter() - start) * 1000.0
     except Exception:
@@ -130,6 +146,9 @@ async def run() -> None:
         max_per_prefix = int(read_env("MAX_PER_PREFIX", "3"))
     except ValueError:
         max_per_prefix = 3
+    ws_path = read_env("WS_PATH", "/")
+    if not ws_path.startswith("/"):
+        ws_path = "/" + ws_path
 
     sample_ips = max(1, sample_ips)
     output_limit = max(1, output_limit)
@@ -161,7 +180,7 @@ async def run() -> None:
             tls_ms = await probe_tls(ip, port, target_host, timeout_sec)
             if tls_ms is None:
                 return (ip, port, None)
-            ms = await probe_http(ip, port, target_host, timeout_sec)
+            ms = await probe_websocket(ip, port, target_host, ws_path, timeout_sec)
             return (ip, port, ms)
 
     results = await asyncio.gather(*(one(ip, port) for ip, port in candidates))
