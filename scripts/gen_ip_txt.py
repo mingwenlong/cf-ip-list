@@ -110,7 +110,7 @@ async def probe_websocket(ip: str, port: int, server_name: str, ws_path: str, ti
 async def run() -> None:
     target_host = read_env("TARGET_HOST", "qq.mingvpn.dpdns.org")
 
-    ports_raw = read_env("PORTS", "443,8443")
+    ports_raw = read_env("PORTS", "443,8443,2053")
     ports = []
     for p in ports_raw.replace(" ", "").split(","):
         if not p:
@@ -127,25 +127,25 @@ async def run() -> None:
     except ValueError:
         sample_ips = 2000
     try:
-        output_limit = int(read_env("OUTPUT_LIMIT", "15"))
+        output_limit = int(read_env("OUTPUT_LIMIT", "20"))
     except ValueError:
-        output_limit = 15
+        output_limit = 20
     try:
         concurrency = int(read_env("CONCURRENCY", "180"))
     except ValueError:
         concurrency = 180
     try:
-        timeout_sec = float(read_env("TIMEOUT_SEC", "1.5"))
+        timeout_sec = float(read_env("TIMEOUT_SEC", "2.2"))
     except ValueError:
-        timeout_sec = 1.5
+        timeout_sec = 2.2
     try:
-        max_ms = float(read_env("MAX_MS", "100"))
+        max_ms = float(read_env("MAX_MS", "180"))
     except ValueError:
-        max_ms = 100
+        max_ms = 180
     try:
-        max_per_prefix = int(read_env("MAX_PER_PREFIX", "1"))
+        max_per_prefix = int(read_env("MAX_PER_PREFIX", "2"))
     except ValueError:
-        max_per_prefix = 1
+        max_per_prefix = 2
     ws_path = read_env("WS_PATH", "/")
     if not ws_path.startswith("/"):
         ws_path = "/" + ws_path
@@ -202,6 +202,8 @@ async def run() -> None:
 
     top = picked
     lines = [f"{ip}:{port}#{int(ms)}ms" for ip, port, ms in top]
+    if not lines:
+        raise SystemExit("No healthy endpoints found with current thresholds. Keep previous ip.txt and relax filters.")
     content = "\n".join(lines).strip() + ("\n" if lines else "")
 
     Path("ip.txt").write_text(content, encoding="utf-8")
