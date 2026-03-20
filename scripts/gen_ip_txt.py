@@ -146,6 +146,10 @@ async def run() -> None:
         max_per_prefix = int(read_env("MAX_PER_PREFIX", "2"))
     except ValueError:
         max_per_prefix = 2
+    try:
+        min_output = int(read_env("MIN_OUTPUT", "8"))
+    except ValueError:
+        min_output = 8
     ws_path = read_env("WS_PATH", "/")
     if not ws_path.startswith("/"):
         ws_path = "/" + ws_path
@@ -156,6 +160,7 @@ async def run() -> None:
     timeout_sec = max(0.2, timeout_sec)
     max_ms = max(1.0, max_ms)
     max_per_prefix = max(1, max_per_prefix)
+    min_output = max(1, min(min_output, output_limit))
 
     cidrs = fetch_lines("https://www.cloudflare.com/ips-v4")
     if not cidrs:
@@ -185,22 +190,37 @@ async def run() -> None:
 
     results = await asyncio.gather(*(one(ip, port) for ip, port in candidates))
 
-    ok = [(ip, port, ms) for ip, port, ms in results if ms is not None and ms <= max_ms]
-    ok.sort(key=lambda x: x[2])
+    ok = [(ip, port, ms) for ip, port, ms in results if ms is not None]
 
-    picked = []
-    prefix_count: dict[str, int] = {}
-    for ip, port, ms in ok:
-        prefix = ".".join(ip.split(".")[:2])
-        count = prefix_count.get(prefix, 0)
-        if count >= max_per_prefix:
-            continue
-        picked.append((ip, port, ms))
-        prefix_count[prefix] = count + 1
-        if len(picked) >= output_limit:
-            break
+    def port_penalty(p: int) -> float:
+        if p == 443:
+            return 0.0
+        if p == 8443:
+            return 8.0
+        return 20.0
 
-    top = picked
+    def pick(items: list[tuple[str, int, float]], limit_ms: float, per_prefix: int) -> list[tuple[str, int, float]]:
+        within = [(ip, port, ms) for ip, port, ms in items if ms <= limit_ms]
+        within.sort(key=lambda x: x[2] + port_penalty(x[1]))
+        picked_local: list[tuple[str, int, float]] = []
+        prefix_count: dict[str, int] = {}
+        for ip, port, ms in within:
+            prefix = ".".join(ip.split(".")[:2])
+            count = prefix_count.get(prefix, 0)
+            if count >= per_prefix:
+                continue
+            picked_local.append((ip, port, ms))
+            prefix_count[prefix] = count + 1
+            if len(picked_local) >= output_limit:
+                break
+        return picked_local
+
+    top = pick(ok, max_ms, max_per_prefix)
+    if len(top) < min_output:
+        top = pick(ok, max_ms * 1.6, max_per_prefix + 1)
+    if len(top) < min_output:
+        top = pick(ok, max_ms * 2.2, max_per_prefix + 2)
+
     lines = [f"{ip}:{port}#{int(ms)}ms" for ip, port, ms in top]
     if not lines:
         raise SystemExit("No healthy endpoints found with current thresholds. Keep previous ip.txt and relax filters.")
