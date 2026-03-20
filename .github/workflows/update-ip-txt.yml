@@ -29,6 +29,7 @@ jobs:
           WS_PATH: ${{ vars.WS_PATH || '/' }}
           MAX_MS: ${{ vars.MAX_MS || '180' }}
           MAX_PER_PREFIX: ${{ vars.MAX_PER_PREFIX || '2' }}
+          MIN_OUTPUT: ${{ vars.MIN_OUTPUT || '8' }}
         run: python scripts/gen_ip_txt.py
 
       - name: Validate ip.txt
