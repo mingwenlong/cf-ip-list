@@ -110,7 +110,7 @@ async def probe_websocket(ip: str, port: int, server_name: str, ws_path: str, ti
 async def run() -> None:
     target_host = read_env("TARGET_HOST", "qq.mingvpn.dpdns.org")
 
-    ports_raw = read_env("PORTS", "443,2053,2083,2087,2096,8443")
+    ports_raw = read_env("PORTS", "443,8443")
     ports = []
     for p in ports_raw.replace(" ", "").split(","):
         if not p:
@@ -123,29 +123,29 @@ async def run() -> None:
         raise SystemExit("No valid PORTS")
 
     try:
-        sample_ips = int(read_env("SAMPLE_IPS", "600"))
+        sample_ips = int(read_env("SAMPLE_IPS", "2000"))
     except ValueError:
-        sample_ips = 600
+        sample_ips = 2000
     try:
-        output_limit = int(read_env("OUTPUT_LIMIT", "80"))
+        output_limit = int(read_env("OUTPUT_LIMIT", "15"))
     except ValueError:
-        output_limit = 80
+        output_limit = 15
     try:
-        concurrency = int(read_env("CONCURRENCY", "250"))
+        concurrency = int(read_env("CONCURRENCY", "180"))
     except ValueError:
-        concurrency = 250
+        concurrency = 180
     try:
-        timeout_sec = float(read_env("TIMEOUT_SEC", "2.5"))
+        timeout_sec = float(read_env("TIMEOUT_SEC", "1.5"))
     except ValueError:
-        timeout_sec = 2.5
+        timeout_sec = 1.5
     try:
-        max_ms = float(read_env("MAX_MS", "180"))
+        max_ms = float(read_env("MAX_MS", "100"))
     except ValueError:
-        max_ms = 180
+        max_ms = 100
     try:
-        max_per_prefix = int(read_env("MAX_PER_PREFIX", "3"))
+        max_per_prefix = int(read_env("MAX_PER_PREFIX", "1"))
     except ValueError:
-        max_per_prefix = 3
+        max_per_prefix = 1
     ws_path = read_env("WS_PATH", "/")
     if not ws_path.startswith("/"):
         ws_path = "/" + ws_path
