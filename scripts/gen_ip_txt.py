@@ -123,33 +123,33 @@ async def run() -> None:
         raise SystemExit("No valid PORTS")
 
     try:
-        sample_ips = int(read_env("SAMPLE_IPS", "2000"))
+        sample_ips = int(read_env("SAMPLE_IPS", "800"))
     except ValueError:
-        sample_ips = 2000
+        sample_ips = 800
     try:
         output_limit = int(read_env("OUTPUT_LIMIT", "20"))
     except ValueError:
         output_limit = 20
     try:
-        concurrency = int(read_env("CONCURRENCY", "180"))
+        concurrency = int(read_env("CONCURRENCY", "60"))
     except ValueError:
-        concurrency = 180
+        concurrency = 60
     try:
-        timeout_sec = float(read_env("TIMEOUT_SEC", "2.2"))
+        timeout_sec = float(read_env("TIMEOUT_SEC", "4"))
     except ValueError:
-        timeout_sec = 2.2
+        timeout_sec = 4.0
     try:
-        max_ms = float(read_env("MAX_MS", "180"))
+        max_ms = float(read_env("MAX_MS", "350"))
     except ValueError:
-        max_ms = 180
+        max_ms = 350.0
     try:
-        max_per_prefix = int(read_env("MAX_PER_PREFIX", "2"))
+        max_per_prefix = int(read_env("MAX_PER_PREFIX", "3"))
     except ValueError:
-        max_per_prefix = 2
+        max_per_prefix = 3
     try:
-        min_output = int(read_env("MIN_OUTPUT", "8"))
+        min_output = int(read_env("MIN_OUTPUT", "1"))
     except ValueError:
-        min_output = 8
+        min_output = 1
     ws_path = read_env("WS_PATH", "/")
     if not ws_path.startswith("/"):
         ws_path = "/" + ws_path
