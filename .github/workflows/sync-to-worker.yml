@@ -24,7 +24,7 @@ jobs:
           ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
           UA: GitHub-Actions-Sync/1.0
         run: |
-          # 登录并保存 Cookie（不重定向到 /dev/null）
+          # 登录并保存 Cookie
           curl -fsSL \
             -c cookies.txt \
             -H "User-Agent: $UA" \
@@ -32,8 +32,8 @@ jobs:
             --data-urlencode "password=$ADMIN_PASSWORD" \
             "$WORKER_URL/login" > login_response.txt
 
-          # 检查登录是否成功
-          if ! grep -q '"success": true' login_response.txt; then
+          # 检查登录是否成功（修复：去掉空格）
+          if ! grep -q 'success.*true' login_response.txt; then
             echo "::error::Login failed. Response:"
             cat login_response.txt
             exit 1
