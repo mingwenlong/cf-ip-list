@@ -32,7 +32,7 @@ jobs:
             --data-urlencode "password=$ADMIN_PASSWORD" \
             "$WORKER_URL/login" > login_response.txt
 
-          # 检查登录是否成功（修复：小写 success，无空格）
+          # 检查登录是否成功（修复：去掉空格，精确匹配）
           if ! grep -q '"success":true' login_response.txt; then
             echo "::error::Login failed. Response:"
             cat login_response.txt
