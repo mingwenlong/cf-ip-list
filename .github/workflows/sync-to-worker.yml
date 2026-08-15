@@ -2,8 +2,8 @@ name: Sync GitHub raw ip.txt to Worker ADD.txt (Hourly)
 
 on:
   schedule:
-    # 每小时执行一次
-    - cron: '0 * * * *'
+    # 每半小时执行一次
+    - cron: '*/30 * * * *'
   workflow_dispatch:  # 允许手动触发
 
 jobs:
