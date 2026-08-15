@@ -1,0 +1,88 @@
+name: Sync GitHub raw ip.txt to Worker ADD.txt
+
+on:
+  schedule:
+    # 每 6 小时执行一次（可自行调整）
+    - cron: '0 */6 * * *'
+  workflow_dispatch:  # 允许手动触发
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download ip.txt from GitHub raw
+        env:
+          GITHUB_RAW_URL: https://raw.githubusercontent.com/mingwenlong/cf-ip-list/refs/heads/main/ip.txt
+        run: |
+          # 下载 ip.txt 到当前目录
+          curl -fsSL "$GITHUB_RAW_URL" -o ip.txt
+          # 检查文件是否下载成功
+          if [ ! -f "ip.txt" ] || [ ! -s "ip.txt" ]; then
+            echo "::error::Failed to download ip.txt from GitHub raw"
+            exit 1
+          fi
+          echo "✅ Successfully downloaded ip.txt"
+
+      - name: Login to Worker and get auth cookie
+        env:
+          WORKER_URL: ${{ secrets.WORKER_URL }}
+          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+          UA: GitHub-Actions-Sync/1.0
+        run: |
+          # 登录 Worker 获取 auth Cookie
+          curl -fsSL \
+            -c cookies.txt \
+            -H "User-Agent: $UA" \
+            -H "Content-Type: application/x-www-form-urlencoded" \
+            --data-urlencode "password=$ADMIN_PASSWORD" \
+            "$WORKER_URL/login" > /dev/null
+
+          # 检查是否登录成功
+          if [ ! -f "cookies.txt" ] || ! grep -q "auth=" cookies.txt; then
+            echo "::error::Failed to login to Worker"
+            exit 1
+          fi
+          echo "✅ Successfully logged in to Worker"
+
+      - name: Push ip.txt to Worker ADD.txt
+        env:
+          WORKER_URL: ${{ secrets.WORKER_URL }}
+          UA: GitHub-Actions-Sync/1.0
+        run: |
+          # 上传 ip.txt 到 Worker 的 ADD.txt
+          response=$(curl -w "%{http_code}" -sS \
+            -X POST \
+            -b cookies.txt \
+            -H "User-Agent: $UA" \
+            -H "Content-Type: text/plain; charset=utf-8" \
+            --data-binary "@ip.txt" \
+            "$WORKER_URL/admin/ADD.txt")
+
+          http_code=${response: -3}
+          response_body=${response%???}
+
+          if [ "$http_code" != "200" ]; then
+            echo "::error::Failed to push ip.txt to Worker. HTTP Status: $http_code"
+            echo "Response: $response_body"
+            exit 1
+          fi
+          echo "✅ Successfully pushed ip.txt to Worker ADD.txt"
+
+      - name: Verify sync result
+        env:
+          WORKER_URL: ${{ secrets.WORKER_URL }}
+          UA: GitHub-Actions-Sync/1.0
+        run: |
+          # 验证 ADD.txt 内容是否已更新
+          current_content=$(curl -s -b cookies.txt -H "User-Agent: $UA" "$WORKER_URL/admin/ADD.txt")
+          local_content=$(cat ip.txt)
+
+          if [ "$current_content" = "$local_content" ]; then
+            echo "✅ ADD.txt content matches ip.txt"
+          else
+            echo "::warning::ADD.txt content does not match ip.txt"
+            echo "Expected:"
+            echo "$local_content"
+            echo "Actual:"
+            echo "$current_content"
+          fi
