@@ -1,0 +1,73 @@
+name: update ip.txt (speed)
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "*/30 * * * *"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Backup current ip.txt
+        run: |
+          if [ -f ip.txt ]; then
+            cp ip.txt ip.txt.bak
+          fi
+
+      - name: Generate ip.txt
+        env:
+          TARGET_HOST: ${{ vars.TARGET_HOST || 'qq.mingvpn.dpdns.org' }}
+          PORTS: ${{ vars.PORTS || '443,8443,2053' }}
+          SAMPLE_IPS: ${{ vars.SAMPLE_IPS || '800' }}
+          OUTPUT_LIMIT: ${{ vars.OUTPUT_LIMIT || '20' }}
+          CONCURRENCY: ${{ vars.CONCURRENCY || '60' }}
+          TIMEOUT_SEC: ${{ vars.TIMEOUT_SEC || '4' }}
+          WS_PATH: ${{ vars.WS_PATH || '/' }}
+          MAX_MS: ${{ vars.MAX_MS || '350' }}
+          MAX_PER_PREFIX: ${{ vars.MAX_PER_PREFIX || '3' }}
+          MIN_OUTPUT: ${{ vars.MIN_OUTPUT || '1' }}
+        run: |
+          set +e
+          python scripts/gen_ip_txt.py
+          code=$?
+          if [ $code -ne 0 ]; then
+            echo "Generation failed, restoring backup if available..."
+            if [ -f ip.txt.bak ]; then
+              mv ip.txt.bak ip.txt
+              exit 0
+            fi
+            exit $code
+          fi
+
+      - name: Validate ip.txt
+        run: |
+          if [ ! -s ip.txt ]; then
+            echo "ip.txt is empty"
+            exit 1
+          fi
+
+      - name: Commit changes
+        run: |
+          if git diff --quiet -- ip.txt; then
+            echo "No changes"
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add ip.txt
+          git commit -m "chore: update ip.txt"
+          git push
