@@ -1,9 +1,9 @@
-name: Sync GitHub raw ip.txt to Worker ADD.txt
+name: Sync GitHub raw ip.txt to Worker ADD.txt (Hourly)
 
 on:
   schedule:
-    # 每 6 小时执行一次（可自行调整）
-    - cron: '0 */6 * * *'
+    # 每小时执行一次
+    - cron: '0 * * * *'
   workflow_dispatch:  # 允许手动触发
 
 jobs:
@@ -11,11 +11,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Download ip.txt from GitHub raw
-        env:
-          GITHUB_RAW_URL: https://raw.githubusercontent.com/mingwenlong/cf-ip-list/refs/heads/main/ip.txt
         run: |
           # 下载 ip.txt 到当前目录
-          curl -fsSL "$GITHUB_RAW_URL" -o ip.txt
+          curl -fsSL https://raw.githubusercontent.com/mingwenlong/cf-ip-list/refs/heads/main/ip.txt -o ip.txt
+
           # 检查文件是否下载成功
           if [ ! -f "ip.txt" ] || [ ! -s "ip.txt" ]; then
             echo "::error::Failed to download ip.txt from GitHub raw"
@@ -81,8 +80,4 @@ jobs:
             echo "✅ ADD.txt content matches ip.txt"
           else
             echo "::warning::ADD.txt content does not match ip.txt"
-            echo "Expected:"
-            echo "$local_content"
-            echo "Actual:"
-            echo "$current_content"
           fi
