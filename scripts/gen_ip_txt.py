@@ -11,18 +11,15 @@ import urllib.request
 from functools import lru_cache
 from pathlib import Path
 
-
 def read_env(name: str, default: str) -> str:
     v = os.getenv(name)
     return v.strip() if v is not None and str(v).strip() else default
-
 
 def fetch_lines(url: str) -> list[str]:
     req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
     with urllib.request.urlopen(req, timeout=20) as resp:
         text = resp.read().decode("utf-8", errors="replace")
     return [line.strip() for line in text.splitlines() if line.strip()]
-
 
 def pick_random_ipv4_from_cidr(cidr: str) -> str:
     net = ipaddress.ip_network(cidr, strict=False)
@@ -31,7 +28,6 @@ def pick_random_ipv4_from_cidr(cidr: str) -> str:
     start = int(net.network_address) + 1
     end = int(net.broadcast_address) - 1
     return str(ipaddress.IPv4Address(random.randint(start, end)))
-
 
 async def probe_tls(ip: str, port: int, server_name: str, timeout: float) -> float | None:
     ctx = ssl.create_default_context()
@@ -52,7 +48,6 @@ async def probe_tls(ip: str, port: int, server_name: str, timeout: float) -> flo
         return (time.perf_counter() - start) * 1000.0
     except Exception:
         return None
-
 
 async def probe_websocket(ip: str, port: int, server_name: str, ws_path: str, timeout: float) -> float | None:
     ctx = ssl.create_default_context()
@@ -108,7 +103,6 @@ async def probe_websocket(ip: str, port: int, server_name: str, ws_path: str, ti
             except Exception:
                 pass
 
-
 COUNTRY_CN = {
     "US": "美国",
     "HK": "香港",
@@ -146,7 +140,6 @@ COUNTRY_CN = {
     "ZA": "南非",
 }
 
-
 @lru_cache(maxsize=4096)
 def get_location_cn(ip: str) -> tuple[str, str]:
     try:
@@ -161,7 +154,6 @@ def get_location_cn(ip: str) -> tuple[str, str]:
         return country, city
     except Exception:
         return "未知国家", ""
-
 
 async def run() -> None:
     target_host = read_env("TARGET_HOST", "qq.mingvpn.dpdns.org")
@@ -284,12 +276,13 @@ async def run() -> None:
         if not location:
             location = "未知地区"
         lines.append(f"{ip}:{port}#{location} {int(ms)}ms")
+
     if not lines:
         raise SystemExit("No healthy endpoints found with current thresholds. Keep previous ip.txt and relax filters.")
+
     content = "\n".join(lines).strip() + ("\n" if lines else "")
 
     Path("ip.txt").write_text(content, encoding="utf-8")
-
 
 if __name__ == "__main__":
     asyncio.run(run())
