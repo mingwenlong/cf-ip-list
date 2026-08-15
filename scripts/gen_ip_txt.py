@@ -2,11 +2,13 @@ import asyncio
 import base64
 import hashlib
 import ipaddress
+import json
 import os
 import random
 import ssl
 import time
 import urllib.request
+from functools import lru_cache
 from pathlib import Path
 
 
@@ -105,6 +107,60 @@ async def probe_websocket(ip: str, port: int, server_name: str, ws_path: str, ti
                 await writer.wait_closed()
             except Exception:
                 pass
+
+
+COUNTRY_CN = {
+    "US": "美国",
+    "HK": "香港",
+    "JP": "日本",
+    "SG": "新加坡",
+    "KR": "韩国",
+    "TW": "台湾",
+    "CN": "中国",
+    "CA": "加拿大",
+    "GB": "英国",
+    "DE": "德国",
+    "FR": "法国",
+    "NL": "荷兰",
+    "AU": "澳大利亚",
+    "IN": "印度",
+    "BR": "巴西",
+    "RU": "俄罗斯",
+    "ID": "印尼",
+    "TH": "泰国",
+    "MY": "马来西亚",
+    "VN": "越南",
+    "PH": "菲律宾",
+    "AE": "阿联酋",
+    "CH": "瑞士",
+    "SE": "瑞典",
+    "FI": "芬兰",
+    "PL": "波兰",
+    "IT": "意大利",
+    "ES": "西班牙",
+    "TR": "土耳其",
+    "AR": "阿根廷",
+    "MX": "墨西哥",
+    "NZ": "新西兰",
+    "SA": "沙特阿拉伯",
+    "ZA": "南非",
+}
+
+
+@lru_cache(maxsize=4096)
+def get_location_cn(ip: str) -> tuple[str, str]:
+    try:
+        url = f"https://ipapi.co/{ip}/json/"
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            data = json.loads(resp.read().decode("utf-8", errors="replace"))
+
+        code = (data.get("country_code") or "").upper()
+        country = COUNTRY_CN.get(code) or data.get("country_name") or "未知国家"
+        city = data.get("city") or ""
+        return country, city
+    except Exception:
+        return "未知国家", ""
 
 
 async def run() -> None:
@@ -221,7 +277,13 @@ async def run() -> None:
     if len(top) < min_output:
         top = pick(ok, max_ms * 2.2, max_per_prefix + 2)
 
-    lines = [f"{ip}:{port}#{int(ms)}ms" for ip, port, ms in top]
+    lines = []
+    for ip, port, ms in top:
+        country, city = get_location_cn(ip)
+        location = f"{country}{city}".strip()
+        if not location:
+            location = "未知地区"
+        lines.append(f"{ip}:{port}#{location} {int(ms)}ms")
     if not lines:
         raise SystemExit("No healthy endpoints found with current thresholds. Keep previous ip.txt and relax filters.")
     content = "\n".join(lines).strip() + ("\n" if lines else "")
